@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>À la pompe — prix des carburants autour de vous</title>
+<meta name="description" content="Carte plein écran des prix et ruptures de carburant autour de vous, avec la date de chaque mise à jour. Données officielles du ministère de l'Économie.">
+<meta name="theme-color" content="#F4F5F2">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="vendor/leaflet.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- La carte occupe tout l'écran ; tout le reste flotte au-dessus -->
+<div id="carte" role="region" aria-label="Carte des stations"></div>
+
+<!-- ============ Barre flottante du haut ============ -->
+<header class="haut" id="haut" hidden>
+  <div class="puces" id="puces" role="radiogroup" aria-label="Carburant"></div>
+  <div class="outils">
+    <button class="rond" id="btnRayon" type="button" aria-haspopup="dialog"><span id="rayonPuce">30 km</span></button>
+    <button class="rond" id="btnMenu" type="button" aria-label="Réglages" aria-haspopup="dialog">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+    </button>
+  </div>
+  <div class="toast" id="bandeau" role="status" hidden></div>
+</header>
+
+<!-- Boutons de carte -->
+<div class="boutons-carte" id="boutonsCarte" hidden>
+  <button class="rond grand" id="btnPosition" type="button" aria-label="Me localiser">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" class="plein"/></svg>
+  </button>
+  <button class="rond grand" id="btnAdresse" type="button" aria-label="Chercher une adresse">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg>
+  </button>
+</div>
+
+<!-- ============ Feuille du bas ============ -->
+<section class="feuille" id="feuille" data-etat="bas" hidden aria-label="Résultats">
+  <button class="poignee" id="poignee" type="button" aria-label="Agrandir ou réduire la liste"><span></span></button>
+  <div class="feuille-corps">
+    <div id="vueListe">
+      <div class="resume" id="resume"></div>
+      <div id="infos"></div>
+      <div class="barre-tri" role="group" aria-label="Trier par">
+        <button type="button" data-tri="prix" aria-pressed="true">Prix</button>
+        <button type="button" data-tri="cout" aria-pressed="false">Coût du plein</button>
+        <button type="button" data-tri="dist" aria-pressed="false">Distance</button>
+        <button type="button" data-tri="maj" aria-pressed="false">Fraîcheur</button>
+      </div>
+      <ol class="stations" id="liste"></ol>
+      <p class="source" id="source"></p>
+    </div>
+    <div id="vueDetail" hidden></div>
+  </div>
+</section>
+
+<!-- ============ Accueil ============ -->
+<div class="accueil" id="accueil">
+  <form class="carte-accueil" id="formAccueil">
+    <div class="logo" aria-hidden="true">
+      <svg viewBox="0 0 48 48"><rect x="10" y="8" width="18" height="30" rx="3"/><rect x="13.5" y="12" width="11" height="8" rx="1.5" class="trou"/><path d="M28 14h4l3 4v14a3 3 0 0 1-6 0v-6h-1"/><rect x="7" y="38" width="24" height="3" rx="1.5"/></svg>
+    </div>
+    <h1>À la pompe</h1>
+    <p class="sous-titre">Le prix de votre carburant dans chaque station autour de vous, et depuis quand il est à jour.</p>
+    <p class="etiquette">Carburant</p>
+    <div class="choix-carbu" id="listeCarbus"></div>
+    <p class="etiquette"><label for="rayonAccueil">Distance</label> <output id="rayonAccueilVal" for="rayonAccueil">30 km</output></p>
+    <input type="range" id="rayonAccueil" min="5" max="50" step="5" value="30">
+    <button class="principal" id="btnGo" type="submit">Me localiser</button>
+    <button class="secondaire" id="btnAdresseAccueil" type="button">Chercher autour d'une adresse</button>
+    <div id="msgAccueil" role="alert"></div>
+    <p class="mention">Votre position reste sur votre appareil. Prix et ruptures sont déclarés par les stations, sans contrôle en temps réel.</p>
+  </form>
+</div>
+
+<!-- ============ Distance ============ -->
+<dialog id="dlgRayon" class="fiche" aria-labelledby="titreRayon">
+  <form method="dialog">
+    <h2 id="titreRayon">Distance de recherche</h2>
+    <div class="ligne-rayon">
+      <input type="range" id="rayon" min="5" max="50" step="5" value="30" aria-labelledby="titreRayon">
+      <output id="rayonVal" for="rayon">30 km</output>
+    </div>
+    <div class="actions"><button class="principal" value="ok">Appliquer</button></div>
+  </form>
+</dialog>
+
+<!-- ============ Réglages ============ -->
+<dialog id="dlgMenu" class="fiche" aria-labelledby="titreMenu">
+  <form method="dialog" id="formMenu">
+    <h2 id="titreMenu">Réglages</h2>
+    <h3>Mon plein</h3>
+    <div class="deux">
+      <label class="champ"><span>Litres à mettre</span><input id="volume" type="number" min="5" max="150" step="1" inputmode="decimal"></label>
+      <label class="champ"><span>Conso (L/100 km)</span><input id="conso" type="number" min="2" max="30" step="0.1" inputmode="decimal"></label>
+    </div>
+    <p class="aide">Sert au calcul « coût du plein » : prix × litres + aller-retour jusqu'à la station (vol d'oiseau × 1,3). Le temps passé n'est pas compté.</p>
+    <h3>Afficher</h3>
+    <label class="bascule"><input type="checkbox" data-filtre="recent"><span>Seulement les prix de moins de 72 h</span></label>
+    <label class="bascule"><input type="checkbox" data-filtre="rupt"><span>Masquer les ruptures</span></label>
+    <label class="bascule"><input type="checkbox" data-filtre="autoroute"><span>Exclure les autoroutes</span></label>
+    <label class="bascule"><input type="checkbox" data-filtre="h24"><span>Seulement les automates 24 h/24</span></label>
+    <h3>Lire les couleurs</h3>
+    <ul class="legende">
+      <li><i class="f-frais"></i>Prix mis à jour il y a moins de 24 h</li>
+      <li><i class="f-moyen"></i>1 à 3 jours</li>
+      <li><i class="f-vieux"></i>3 à 7 jours</li>
+      <li><i class="f-douteux"></i>Plus de 7 jours : à vérifier sur place</li>
+      <li><i class="f-rupture"></i>Rupture déclarée par la station</li>
+    </ul>
+    <div class="actions">
+      <button class="secondaire" value="annuler" formnovalidate>Annuler</button>
+      <button class="principal" value="ok">Enregistrer</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ============ Adresse ============ -->
+<dialog id="dlgAdresse" class="fiche" aria-labelledby="titreAdresse">
+  <div class="dlg">
+    <h2 id="titreAdresse">Chercher autour d'une adresse</h2>
+    <input id="champAdresse" class="recherche" type="search" autocomplete="off" placeholder="Adresse, ville ou code postal" aria-label="Adresse, ville ou code postal">
+    <ul id="resultatsAdresse" aria-label="Résultats"></ul>
+    <div class="actions"><button class="secondaire" type="button" id="fermerAdresse">Annuler</button></div>
+  </div>
+</dialog>
+
+<script src="vendor/leaflet.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
